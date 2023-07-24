@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 	"sync"
+	"time"
 )
 
 type Server struct {
@@ -56,15 +58,12 @@ func (server *Server) Handler(conn net.Conn) {
 	//...当前链接的业务
 	//fmt.Println("链接建立成功")
 
-	user := NewUser(conn)
+	user := NewUser(conn, server)
 
-	//用户上线,将用户加入到onlineMap中
-	server.mapLock.Lock()
-	server.OnlineMap[user.Name] = user
-	server.mapLock.Unlock()
+	user.Online()
 
-	//广播当前用户上线消息
-	server.BroadCast(user, "is online")
+	//监听用户是否活跃channel
+	isLive := make(chan bool)
 
 	//接受客户端发送的消息
 	go func() {
@@ -72,8 +71,8 @@ func (server *Server) Handler(conn net.Conn) {
 		for {
 			n, err := conn.Read(buf)
 			if n == 0 {
-				server.BroadCast(user, "outline")
-				return
+				user.Offline()
+				runtime.Goexit()
 			}
 
 			if err != nil && err != io.EOF {
@@ -85,12 +84,30 @@ func (server *Server) Handler(conn net.Conn) {
 			msg := string(buf[:n-1])
 
 			//用户针对msg进行消息处理
-			server.BroadCast(user, msg)
+			user.DoMessage(msg)
+
+			//用户的任意消息，代表当前用户是活跃状态
+			isLive <- true
 		}
 	}()
 
 	//当前handler阻塞
-	select {}
+	for {
+		select {
+		case <-isLive:
+			//检测到当前用户活跃，打破下面定时case的阻塞，重新执行一遍select达到重新定时的效果
+		case <-time.After(time.Second * 300):
+			//已经超时，将当前的User强制关闭
+			user.C <- "You're being taken offline\n"
+
+			//关闭channel
+			close(user.C)
+			//关闭连接
+			//conn.Close()
+
+			return
+		}
+	}
 }
 
 // 启动服务器的接口
