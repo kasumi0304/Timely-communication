@@ -5,7 +5,7 @@
 
 #### 软件架构
 软件架构说明
-
+https://gitee.com/kasumiYQRH/timely-communication/raw/master/%E6%9C%AA%E5%91%BD%E5%90%8D%E6%96%87%E4%BB%B6%20(2).jpg
 
 #### 使用说明
 
